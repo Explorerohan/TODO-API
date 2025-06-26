@@ -25,9 +25,18 @@ SECRET_KEY = 'django-insecure-s-fax702r=x0=*_lfdpj(ek!rajq3%p2wb4ym70fex$5295ay)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+       '127.0.0.1',
+       '192.168.254.3',
+]
 
+CORS_ALLOW_ALL_ORIGINS = True
 
+CORS_ALLOWED_ORIGINS = [
+    "http://192.168.254.3:19006",  # Expo dev server (web UI, API requests)
+    "http://localhost:19006",      # Localhost (for web or emulator)
+]
 # Application definition
 
 INSTALLED_APPS = [
@@ -37,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'todoapp',
 ]
@@ -49,6 +59,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
 ]
 
 ROOT_URLCONF = 'todoProject.urls'
