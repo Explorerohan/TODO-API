@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Switch, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Switch, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Pressable } from 'react-native';
 import axios from 'axios';
 
 const API_URL = 'http://192.168.254.3:8000/api/todoinfo/'; 
@@ -12,6 +12,12 @@ export default function App() {
   const [completed, setCompleted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editTodo, setEditTodo] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCompleted, setEditCompleted] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const fetchTodos = async () => {
     setLoading(true);
@@ -50,16 +56,66 @@ export default function App() {
     setSubmitting(false);
   };
 
+  const handleDeleteTodo = async (id) => {
+    try {
+      await axios.delete(`${API_URL}${id}/`);
+      setTodos(todos.filter(todo => todo.id !== id));
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete todo');
+    }
+  };
+
+  const openEditModal = (todo) => {
+    setEditTodo(todo);
+    setEditTitle(todo.title);
+    setEditDescription(todo.description);
+    setEditCompleted(todo.completed);
+    setEditModalVisible(true);
+  };
+
+  const handleEditTodo = async () => {
+    if (!editTitle.trim() || !editDescription.trim()) {
+      Alert.alert('Validation', 'Title and Description are required.');
+      return;
+    }
+    setEditSubmitting(true);
+    try {
+      const response = await axios.put(`${API_URL}${editTodo.id}/`, {
+        title: editTitle,
+        description: editDescription,
+        completed: editCompleted,
+      });
+      setTodos(todos.map(todo => todo.id === editTodo.id ? response.data : todo));
+      setEditModalVisible(false);
+      setEditTodo(null);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update todo');
+    }
+    setEditSubmitting(false);
+  };
+
   const renderItem = ({ item }) => (
     <View style={styles.todoItem}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.todoTitle}>{item.title}</Text>
-        <Text style={styles.todoDescription}>{item.description}</Text>
-      </View>
-      <View style={styles.statusContainer}>
-        <Text style={item.completed ? styles.completed : styles.notCompleted}>
-          {item.completed ? '✓' : '✗'}
+      <View style={styles.todoContent}>
+        <View style={styles.todoHeader}>
+          <Text style={styles.todoTitle} numberOfLines={1}>{item.title}</Text>
+          <View style={[styles.statusBadge, item.completed ? styles.completedBadge : styles.pendingBadge]}>
+            <Text style={styles.statusText}>
+              {item.completed ? 'Completed' : 'Pending'}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.todoDescription} numberOfLines={2}>
+          {item.description}
         </Text>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.editBtn} onPress={() => openEditModal(item)}>
+            <Text style={styles.actionText}>✏️ Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteTodo(item.id)}>
+            <Text style={styles.actionText}>🗑️ Delete</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -116,6 +172,57 @@ export default function App() {
             />
           )}
         </View>
+        <Modal
+          visible={editModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setEditModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalHeader}>Edit Todo</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Title"
+                value={editTitle}
+                onChangeText={setEditTitle}
+                editable={!editSubmitting}
+              />
+              <TextInput
+                style={[styles.input, { height: 60 }]}
+                placeholder="Description"
+                value={editDescription}
+                onChangeText={setEditDescription}
+                multiline
+                editable={!editSubmitting}
+              />
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Completed:</Text>
+                <Switch
+                  value={editCompleted}
+                  onValueChange={setEditCompleted}
+                  disabled={editSubmitting}
+                />
+              </View>
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={handleEditTodo}
+                  disabled={editSubmitting}
+                >
+                  <Text style={styles.addButtonText}>{editSubmitting ? 'Saving...' : 'Save'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.addButton, { backgroundColor: '#aaa', marginLeft: 10 }]}
+                  onPress={() => setEditModalVisible(false)}
+                  disabled={editSubmitting}
+                >
+                  <Text style={styles.addButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
         <StatusBar style="dark" />
       </View>
     </KeyboardAvoidingView>
@@ -183,42 +290,108 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   todoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  todoContent: {
+    flex: 1,
+  },
+  todoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   todoTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#222',
-    marginBottom: 4,
+    flex: 1,
+    marginRight: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  completedBadge: {
+    backgroundColor: '#34C759',
+  },
+  pendingBadge: {
+    backgroundColor: '#FF9500',
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   todoDescription: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#666',
+    lineHeight: 20,
+    marginBottom: 12,
   },
-  statusContainer: {
-    marginLeft: 16,
-    alignItems: 'center',
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  editBtn: {
+    backgroundColor: '#007AFF',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  deleteBtn: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  actionText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  completed: {
-    fontSize: 22,
-    color: '#34C759',
-    fontWeight: 'bold',
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
-  notCompleted: {
+  modalHeader: {
     fontSize: 22,
-    color: '#FF3B30',
     fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 16,
+    alignSelf: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
   },
   emptyText: {
     textAlign: 'center',
